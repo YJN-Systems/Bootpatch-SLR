@@ -65,6 +65,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
+#include <linux/spslr.h>
+
 /*
  * Mutex protects:
  * 1) List of modules (also safely readable with preempt_disable),
@@ -2847,6 +2849,59 @@ static int early_mod_check(struct load_info *info, int flags)
 	return err;
 }
 
+/* Find spslr symbol in module without kallsym */
+static unsigned long spslr_find_module_symbol(const struct load_info *info,
+					      const char *name)
+{
+	Elf_Shdr *symsec = &info->sechdrs[info->index.sym];
+	Elf_Sym *sym = (void *)symsec->sh_addr;
+	unsigned int i, n = symsec->sh_size / sizeof(*sym);
+
+	for (i = 1; i < n; i++) {
+		const char *symname = info->strtab + sym[i].st_name;
+
+		if (strcmp(symname, name) != 0)
+			continue;
+
+		/* Ignore undefined symbols just in case. */
+		if (sym[i].st_shndx == SHN_UNDEF)
+			return 0;
+
+		return (unsigned long)sym[i].st_value;
+	}
+
+	return 0;
+}
+
+/* Apply structure layout randomization to module */
+static int __maybe_unused spslr_prepare_module(struct module *mod, const struct load_info *info)
+{
+	struct spslr_module sm = { };
+	struct spslr_status st;
+
+	sm.ipin_cnt = (const void *)spslr_find_module_symbol(info, SPSLR_MODULE_SYM_IPIN_CNT);
+	sm.ipins = (const void *)spslr_find_module_symbol(info, SPSLR_MODULE_SYM_IPINS);
+	sm.ipin_op_cnt = (const void *)spslr_find_module_symbol(info, SPSLR_MODULE_SYM_IPIN_OP_CNT);
+	sm.ipin_ops = (const void *)spslr_find_module_symbol(info, SPSLR_MODULE_SYM_IPIN_OPS);
+	sm.dpin_cnt = (const void *)spslr_find_module_symbol(info, SPSLR_MODULE_SYM_DPIN_CNT);
+	sm.dpins = (const void *)spslr_find_module_symbol(info, SPSLR_MODULE_SYM_DPINS);
+
+	if (!sm.ipin_cnt || !sm.ipins || !sm.ipin_op_cnt ||
+	    !sm.ipin_ops || !sm.dpin_cnt || !sm.dpins) {
+		pr_err("%s: SPSLR metadata incomplete\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	st = spslr_patch_module(&sm);
+	if (st.viability != SPSLR_VIABLE || st.error != SPSLR_OK) {
+		pr_err("%s: SPSLR patch failed: viability=%d error=%d\n",
+		       mod->name, st.viability, st.error);
+		return -ENOEXEC;
+	}
+
+	return 0;
+}
+
 /*
  * Allocate and load the module: note that size of section 0 is always
  * zero, and we rely on this for optional sections.
@@ -2949,6 +3004,13 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	err = post_relocation(mod, info);
 	if (err < 0)
 		goto free_modinfo;
+
+#ifdef CONFIG_SPSLR
+	/* SPSLR must happen after relocation and icache should be flushed afterwards */
+	err = spslr_prepare_module(mod, info);
+	if (err < 0)
+		goto free_modinfo;
+#endif
 
 	flush_module_icache(mod);
 

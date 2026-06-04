@@ -185,6 +185,14 @@ SECTIONS
 		/* rarely changed data like cpu maps */
 		READ_MOSTLY_DATA(INTERNODE_CACHE_BYTES)
 
+#ifdef CONFIG_SPSLR
+		. = ALIGN(8);
+		__spslr_start = .;
+		KEEP(*(.spslr))
+		KEEP(*(.spslr.*))
+		__spslr_end = .;
+#endif
+
 		/* End of data section */
 		_edata = .;
 	} :data

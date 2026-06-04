@@ -20,6 +20,8 @@ cflags-$(CONFIG_X86)		+= -m$(BITS) -D__KERNEL__ \
 				   -fno-asynchronous-unwind-tables \
 				   $(CLANG_FLAGS)
 
+cflags-$(CONFIG_X86_64) += -std=gnu11 -Wno-address-of-packed-member
+
 # arm64 uses the full KBUILD_CFLAGS so it's necessary to explicitly
 # disable the stackleak plugin
 cflags-$(CONFIG_ARM64)		+= -fpie $(DISABLE_STACKLEAK_PLUGIN) \

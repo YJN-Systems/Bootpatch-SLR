@@ -114,6 +114,8 @@
 
 #include <kunit/test.h>
 
+#include <linux/spslr.h>
+
 static int kernel_init(void *);
 
 /*
@@ -952,6 +954,19 @@ void start_kernel(void)
 
 	/* Architectural and non-timekeeping rng init, before allocator init */
 	random_init_early(command_line);
+
+#ifdef CONFIG_SPSLR
+	/* Randomize structure layouts */
+	struct spslr_status spslr_init_status = spslr_init();
+	if (spslr_init_status.error != SPSLR_OK)
+		panic("SPSLR initialization failed");
+
+	struct spslr_status spslr_selfpatch_status = spslr_selfpatch();
+	if (spslr_selfpatch_status.error != SPSLR_OK)
+		panic("SPSLR selfpatch failed");
+
+	pr_notice("Successfully applied SPSLR\n");
+#endif
 
 	/*
 	 * These use large bootmem allocations and must precede
