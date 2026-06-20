@@ -185,6 +185,29 @@ SECTIONS
 		/* rarely changed data like cpu maps */
 		READ_MOSTLY_DATA(INTERNODE_CACHE_BYTES)
 
+#ifdef CONFIG_SPSLR
+		__spslr_start = .;
+
+		. = ALIGN(8);
+		__start_spslr_units = .;
+		KEEP(*(spslr_units))
+		__stop_spslr_units = .;
+
+		. = ALIGN(8);
+		__start_spslr_targets = .;
+		KEEP(*(spslr_targets))
+		__stop_spslr_targets = .;
+
+		. = ALIGN(8);
+		KEEP(*(spslr_target_layouts))
+		KEEP(*(spslr_cu_target_refs))
+		KEEP(*(spslr_ipins))
+		KEEP(*(spslr_dpins))
+		KEEP(*(spslr_strtab))
+
+		__spslr_end = .;
+#endif
+
 		/* End of data section */
 		_edata = .;
 	} :data
