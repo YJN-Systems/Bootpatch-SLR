@@ -22,6 +22,23 @@ targets += randomize_layout_seed.h
 #
 # foo-objs := foo.o foo2.o
 
+pinpoint_plugin-objs := \
+	pinpoint.o \
+	pinpoint_asm_offset_pass.o \
+	pinpoint_gc_preserve.o \
+	pinpoint_layout_hash.o \
+	pinpoint_on_finish_decl.o \
+	pinpoint_on_finish_type.o \
+	pinpoint_on_finish_unit.o \
+	pinpoint_on_preserve_component_ref.o \
+	pinpoint_on_register_attributes.o \
+	pinpoint_on_start_unit.o \
+	pinpoint_rtl_pin_lower_pass.o \
+	pinpoint_separate_offset_pass.o \
+	pinpoint_separator.o \
+	pinpoint_serialize.o \
+	pinpoint_target.o
+
 always-y += $(GCC_PLUGIN)
 
 GCC_PLUGINS_DIR = $(shell $(CC) -print-file-name=plugin)
