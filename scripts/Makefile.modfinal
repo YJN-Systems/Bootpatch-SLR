@@ -33,128 +33,6 @@ quiet_cmd_cc_o_c = CC [M]  $@
 $(extmod_prefix).module-common.o: $(srctree)/scripts/module-common.c FORCE
 	$(call if_changed_dep,cc_o_c)
 
-ifdef CONFIG_SPSLR
-
-quiet_cmd_gen_spslr_mod_list = SPSLRLST [M] $@
-      cmd_gen_spslr_mod_list = set -e; \
-	mod_o=$(@:.spslr-files=.o); \
-	modfile=$(@:.spslr-files=.mod); \
-	tmp=$@.tmp; \
-	found=0; \
-	rm -f "$$tmp"; \
-	add_src() { \
-		src="$$1"; \
-		objctx="$$2"; \
-		case "$$src" in \
-			*.c) \
-				spslr="$(SPSLR_METADIR)/$$src.spslr"; \
-				if [ -f "$$spslr" ]; then \
-					printf '%s\n' "$$spslr" >> "$$tmp"; \
-					found=1; \
-				else \
-					echo "Missing SPSLR sidecar for $$objctx from $$src: $$spslr" >&2; \
-					exit 1; \
-				fi; \
-				;; \
-			*.S) \
-				: ;; \
-			*) \
-				echo "Unsupported source for $$objctx: $$src" >&2; \
-				exit 1; \
-				;; \
-		esac; \
-	}; \
-	add_obj_from_cmd() { \
-		obj="$$1"; \
-		cmdfile="$$(dirname "$$obj")/.$$(basename "$$obj").cmd"; \
-		if [ -f "$$cmdfile" ]; then \
-			src="$$(sed -n 's/^source_.* := //p' "$$cmdfile" | head -n 1)"; \
-			if [ -n "$$src" ]; then \
-				add_src "$$src" "$$obj"; \
-				return 0; \
-			fi; \
-		fi; \
-		return 1; \
-	}; \
-	add_obj_direct() { \
-		obj="$$1"; \
-		src_c="$${obj%.o}.c"; \
-		src_S="$${obj%.o}.S"; \
-		if [ -f "$$src_c" ]; then \
-			add_src "$$src_c" "$$obj"; \
-		elif [ -f "$$src_S" ]; then \
-			: ; \
-		else \
-			echo "Could not determine SPSLR input for $$obj: no .cmd source entry, no $$src_c, and no $$src_S" >&2; \
-			exit 1; \
-		fi; \
-	}; \
-	if add_obj_from_cmd "$$mod_o"; then \
-		: ; \
-	elif [ -f "$$modfile" ]; then \
-		while read tok; do \
-			case "$$tok" in \
-				"" ) \
-					continue ;; \
-				*.mod.o|*.spslr_module.o) \
-					continue ;; \
-				*.o) \
-					if add_obj_from_cmd "$$tok"; then \
-						: ; \
-					else \
-						add_obj_direct "$$tok"; \
-					fi; \
-					;; \
-				*) \
-					echo "Unexpected entry in $$modfile: $$tok" >&2; \
-					exit 1; \
-					;; \
-			esac; \
-		done < "$$modfile"; \
-	else \
-		add_obj_direct "$$mod_o"; \
-	fi; \
-	if [ "$$found" = 1 ]; then \
-		awk '!seen[$$0]++' "$$tmp" > $@; \
-		rm -f "$$tmp"; \
-	else \
-		rm -f "$$tmp"; \
-		: > $@; \
-		echo "WARNING: no .spslr files found for module $$mod_o" >&2; \
-	fi
-
-quiet_cmd_spslr_patchcompile_mod = SPSLR   [M] $@
-      cmd_spslr_patchcompile_mod = set -e; \
-	if [ ! -s $(SPSLR_VMLINUX_TARGET_MAP) ]; then \
-		echo "Missing SPSLR target map: $(SPSLR_VMLINUX_TARGET_MAP)" >&2; \
-		exit 1; \
-	fi; \
-	if [ ! -s $< ]; then \
-		echo "Empty module SPSLR manifest: $<" >&2; \
-		exit 1; \
-	fi; \
-	$(SPSLR_TOOL_PATCHCOMPILE) \
-		--module \
-		--no-new-targets \
-		--load-targets $(SPSLR_VMLINUX_TARGET_MAP) \
-		--verbose \
-		--out $@ \
-		$$(cat $<)
-
-quiet_cmd_spslr_as_mod = AS      [M] $@
-      cmd_spslr_as_mod = $(CC) $(KBUILD_AFLAGS) $(NOSTDINC_FLAGS) $(LINUXINCLUDE) -DMODULE -c -o $@ $<
-
-%.spslr-files: %.o FORCE
-	$(call if_changed,gen_spslr_mod_list)
-
-%.spslr_module.S: %.spslr-files $(SPSLR_VMLINUX_TARGET_MAP) FORCE
-	$(call if_changed,spslr_patchcompile_mod)
-
-%.spslr_module.o: %.spslr_module.S FORCE
-	$(call if_changed,spslr_as_mod)
-
-endif
-
 quiet_cmd_ld_ko_o = LD [M]  $@
       cmd_ld_ko_o =							\
 	$(LD) -r $(KBUILD_LDFLAGS)					\
@@ -179,18 +57,13 @@ if_changed_except = $(if $(call newer_prereqs_except,$(2))$(cmd-check),      \
 	printf '%s\n' 'savedcmd_$@ := $(make-cmd)' > $(dot-target).cmd, @:)
 
 # Re-generate module BTFs if either module's .ko or vmlinux changed
-%.ko: %.o %.mod.o $(extmod_prefix).module-common.o $(if $(CONFIG_SPSLR),%.spslr_module.o) scripts/module.lds $(and $(CONFIG_DEBUG_INFO_BTF_MODULES),$(KBUILD_BUILTIN),vmlinux) FORCE
+%.ko: %.o %.mod.o $(extmod_prefix).module-common.o scripts/module.lds $(and $(CONFIG_DEBUG_INFO_BTF_MODULES),$(KBUILD_BUILTIN),vmlinux) FORCE
 	+$(call if_changed_except,ld_ko_o,vmlinux)
 ifdef CONFIG_DEBUG_INFO_BTF_MODULES
 	+$(if $(newer-prereqs),$(call cmd,btf_ko))
 endif
 
-targets += $(modules:%.o=%.ko) \
-	   $(modules:%.o=%.mod.o) \
-	   $(modules:%.o=%.spslr-files) \
-	   $(modules:%.o=%.spslr_module.S) \
-	   $(modules:%.o=%.spslr_module.o) \
-	   $(extmod_prefix).module-common.o
+targets += $(modules:%.o=%.ko) $(modules:%.o=%.mod.o) $(extmod_prefix).module-common.o
 
 # Add FORCE to the prerequisites of a target to force it to be always rebuilt.
 # ---------------------------------------------------------------------------

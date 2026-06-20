@@ -66,11 +66,6 @@ vmlinux_link()
 	else
 		objs=vmlinux.a
 		libs="${KBUILD_VMLINUX_LIBS}"
-
-		# Only add it here because the spslr section is already contained in vmlinux.o
-		if is_enabled CONFIG_SPSLR; then
-			objs="${objs} ${SPSLR_VMLINUX_SPSLR_SECTION_OBJ}"
-		fi
 	fi
 
 	if is_enabled CONFIG_MODULES; then

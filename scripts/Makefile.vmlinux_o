@@ -54,7 +54,6 @@ quiet_cmd_ld_vmlinux.o = LD      $@
 	$(addprefix -T , $(initcalls-lds)) \
 	--whole-archive vmlinux.a --no-whole-archive \
 	--start-group $(KBUILD_VMLINUX_LIBS) --end-group \
-	$(SPSLR_VMLINUX_SPSLR_SECTION_OBJ) \
 	$(cmd_objtool)
 
 define rule_ld_vmlinux.o

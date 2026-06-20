@@ -177,10 +177,3 @@ sphinx_*/
 
 # Rust analyzer configuration
 /rust-project.json
-
-# SPSLR generated files
-spslr_section.S
-*.spslr-files
-*.spslr_module.S
-tools/spslr/pinpoint.so
-tools/spslr/patchcompile
