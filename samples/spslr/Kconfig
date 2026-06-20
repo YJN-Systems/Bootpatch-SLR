@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menuconfig SAMPLES_SPSLR
+	bool "SPSLR samples"
+	depends on SPSLR
+	help
+	  You can build sample SPSLR kernel code here.
+
+	  If unsure, say N.
+
+if SAMPLES_SPSLR
+
+config SAMPLE_SPSLR_TASKLIST
+	tristate "SPSLR tasklist module example"
+	depends on m
+
+endif # SAMPLES_SPSLR
