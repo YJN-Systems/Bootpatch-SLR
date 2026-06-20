@@ -65,6 +65,8 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
+#include <linux/spslr.h>
+
 /*
  * Mutex protects:
  * 1) List of modules (also safely readable with preempt_disable),
@@ -2847,6 +2849,87 @@ static int early_mod_check(struct load_info *info, int flags)
 	return err;
 }
 
+#ifdef CONFIG_SPSLR
+
+/* Find spslr symbol in module without kallsym */
+static unsigned long spslr_find_module_symbol(const struct load_info *info,
+					      const char *name)
+{
+	Elf_Shdr *symsec = &info->sechdrs[info->index.sym];
+	Elf_Sym *sym = (void *)symsec->sh_addr;
+	unsigned int i, n = symsec->sh_size / sizeof(*sym);
+
+	for (i = 1; i < n; i++) {
+		const char *symname = info->strtab + sym[i].st_name;
+
+		if (strcmp(symname, name) != 0)
+			continue;
+
+		/* Ignore undefined symbols just in case. */
+		if (sym[i].st_shndx == SHN_UNDEF)
+			return 0;
+
+		return (unsigned long)sym[i].st_value;
+	}
+
+	return 0;
+}
+
+/* Apply structure layout randomization to module */
+static int __maybe_unused spslr_prepare_module(struct module *mod,
+					       const struct load_info *info)
+{
+	struct spslr_ctx ctx = { };
+	struct spslr_status st;
+	unsigned long workspace_size;
+	int err = 0;
+
+	ctx.entry.start_units = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_START_UNITS_SYM));
+	if (!ctx.entry.start_units) {
+		pr_err("%s: SPSLR units start symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	ctx.entry.stop_units = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_STOP_UNITS_SYM));
+	if (!ctx.entry.stop_units) {
+		pr_err("%s: SPSLR units stop symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	ctx.entry.start_targets = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_START_TARGETS_SYM));
+	if (!ctx.entry.start_targets) {
+		pr_err("%s: SPSLR targets start symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	ctx.entry.stop_targets = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_STOP_TARGETS_SYM));
+	if (!ctx.entry.stop_targets) {
+		pr_err("%s: SPSLR targets stop symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	workspace_size = spslr_workspace_size(&ctx.entry);
+	ctx.workspace = kvmalloc(workspace_size, GFP_KERNEL);
+	if (!ctx.workspace)
+		return -ENOMEM;
+
+	st = spslr_patch_module(&ctx);
+	if (st.viability != SPSLR_VIABLE || st.error != SPSLR_OK) {
+		pr_err("%s: SPSLR patch failed: viability=%d error=%d\n",
+		       mod->name, st.viability, st.error);
+		err = -ENOEXEC;
+	}
+
+	kvfree(ctx.workspace);
+	return err;
+}
+
+#endif /* CONFIG_SPSLR */
+
 /*
  * Allocate and load the module: note that size of section 0 is always
  * zero, and we rely on this for optional sections.
@@ -2949,6 +3032,15 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	err = post_relocation(mod, info);
 	if (err < 0)
 		goto free_modinfo;
+
+#ifdef CONFIG_SPSLR
+	if (spslr_enabled) {
+		/* SPSLR must happen after relocation and icache should be flushed afterwards */
+		err = spslr_prepare_module(mod, info);
+		if (err < 0)
+			goto free_modinfo;
+	}
+#endif
 
 	flush_module_icache(mod);
 
