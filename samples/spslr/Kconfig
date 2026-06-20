@@ -4,7 +4,7 @@ menuconfig SAMPLES_SPSLR
 	bool "SPSLR samples"
 	depends on SPSLR
 	help
-	  You can build sample Rust kernel code here.
+	  You can build sample SPSLR kernel code here.
 
 	  If unsure, say N.
 

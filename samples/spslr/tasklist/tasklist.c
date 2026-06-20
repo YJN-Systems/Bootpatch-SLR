@@ -1,4 +1,3 @@
-#include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/sched/signal.h>
@@ -15,15 +14,15 @@ static int __init taskinfo_init(void)
     struct task_struct *p;
 
     pr_info("taskinfo: loaded\n");
-    pr_info("    offsetof(task_struct, pid)=%lu\n", offsetof(struct task_struct, pid));
-    pr_info("    offsetof(task_struct, tgid)=%lu\n", offsetof(struct task_struct, tgid));
-    pr_info("    offsetof(task_struct, cred)=%lu\n", offsetof(struct task_struct, cred));
-    pr_info("    offsetof(task_struct, real_parent)=%lu\n", offsetof(struct task_struct, real_parent));
-    pr_info("    offsetof(task_struct, comm)=%lu\n", offsetof(struct task_struct, comm));
-    pr_info("    offsetof(task_struct, __state)=%lu\n", offsetof(struct task_struct, __state));
-    pr_info("    offsetof(task_struct, flags)=%lu\n", offsetof(struct task_struct, flags));
-    pr_info("    offsetof(task_struct, prio)=%lu\n", offsetof(struct task_struct, prio));
-    pr_info("    offsetof(task_struct, policy)=%lu\n", offsetof(struct task_struct, policy));
+    pr_info("    offsetof(task_struct, pid)=%zu\n", offsetof(struct task_struct, pid));
+    pr_info("    offsetof(task_struct, tgid)=%zu\n", offsetof(struct task_struct, tgid));
+    pr_info("    offsetof(task_struct, cred)=%zu\n", offsetof(struct task_struct, cred));
+    pr_info("    offsetof(task_struct, real_parent)=%zu\n", offsetof(struct task_struct, real_parent));
+    pr_info("    offsetof(task_struct, comm)=%zu\n", offsetof(struct task_struct, comm));
+    pr_info("    offsetof(task_struct, __state)=%zu\n", offsetof(struct task_struct, __state));
+    pr_info("    offsetof(task_struct, flags)=%zu\n", offsetof(struct task_struct, flags));
+    pr_info("    offsetof(task_struct, prio)=%zu\n", offsetof(struct task_struct, prio));
+    pr_info("    offsetof(task_struct, policy)=%zu\n", offsetof(struct task_struct, policy));
 
     pr_info("datapin flags value is %u (should be 42)\n", module_target_data.flags);
 
