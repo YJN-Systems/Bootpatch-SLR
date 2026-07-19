@@ -465,6 +465,14 @@ struct ftrace_likely_data {
 # define __latent_entropy
 #endif
 
+#if defined(__SPSLR__)
+# define __spslr __attribute__((spslr))
+# define __spslr_field_fixed __attribute__((spslr_field_fixed))
+#else
+# define __spslr
+# define __spslr_field_fixed
+#endif
+
 #if defined(RANDSTRUCT) && !defined(__CHECKER__)
 # define __randomize_layout __designated_init __attribute__((randomize_layout))
 # define __no_randomize_layout __attribute__((no_randomize_layout))

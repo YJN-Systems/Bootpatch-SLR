@@ -66,6 +66,70 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
 
+#include <linux/spslr.h>
+#include <sanemaker/traps.h>
+
+/* Sanemaker image (de)registration helpers */
+
+static const void *sanemaker_module_image_base(const struct module *mod)
+{
+	unsigned long base = ULONG_MAX;
+
+	if (mod->mem[MOD_TEXT].base && mod->mem[MOD_TEXT].size)
+		base = min(base,
+			   (unsigned long)mod->mem[MOD_TEXT].base);
+
+	if (mod->mem[MOD_INIT_TEXT].base && mod->mem[MOD_INIT_TEXT].size)
+		base = min(base,
+			   (unsigned long)mod->mem[MOD_INIT_TEXT].base);
+
+	return base == ULONG_MAX ? NULL : (const void *)base;
+}
+
+static void sanemaker_register_module_image(struct module *mod)
+{
+	const struct module_memory *text;
+	const void *image_base;
+
+	image_base = sanemaker_module_image_base(mod);
+	if (!image_base)
+		return;
+
+	sanemaker_new_image(mod->name, image_base);
+
+	text = &mod->mem[MOD_TEXT];
+	if (text->base && text->size)
+		sanemaker_new_image_text(
+			mod->name,
+			text->base,
+			(const char *)text->base + text->size);
+
+	text = &mod->mem[MOD_INIT_TEXT];
+	if (text->base && text->size)
+		sanemaker_new_image_text(
+			mod->name,
+			text->base,
+			(const char *)text->base + text->size);
+}
+
+static void sanemaker_drop_module_init_text(struct module *mod)
+{
+	const struct module_memory *text = &mod->mem[MOD_INIT_TEXT];
+
+	if (!text->base || !text->size)
+		return;
+
+	sanemaker_drop_image_text(
+		mod->name,
+		text->base,
+		(const char *)text->base + text->size);
+}
+
+static void sanemaker_unregister_module_image(struct module *mod)
+{
+	sanemaker_drop_image(mod->name);
+}
+
 /*
  * Mutex protects:
  * 1) List of modules (also safely readable within RCU read section),
@@ -1461,6 +1525,7 @@ static void free_module(struct module *mod)
 	kfree(mod->args);
 	percpu_modfree(mod);
 
+	sanemaker_unregister_module_image(mod);
 	free_mod_mem(mod);
 }
 
@@ -3100,10 +3165,22 @@ static noinline int do_init_module(struct module *mod)
 	freeinit->init_data = mod->mem[MOD_INIT_DATA].base;
 	freeinit->init_rodata = mod->mem[MOD_INIT_RODATA].base;
 
+	/*
+	 * Constructors and mod->init are the first entry points into module text.
+	 */
+	sanemaker_register_module_image(mod);
+
 	do_mod_ctors(mod);
 	/* Start the module */
 	if (mod->init != NULL)
 		ret = do_one_initcall(mod->init);
+
+	/*
+	 * mod->init() has returned, so no further execution should enter
+	 * MOD_INIT_TEXT. This is independent of when the allocation is freed.
+	 */
+	sanemaker_drop_module_init_text(mod);
+
 	if (ret < 0) {
 		/*
 		 * -EEXIST is reserved by [f]init_module() to signal to userspace that
@@ -3415,6 +3492,87 @@ static int early_mod_check(struct load_info *info, int flags)
 	return err;
 }
 
+#ifdef CONFIG_SPSLR
+
+/* Find spslr symbol in module without kallsym */
+static unsigned long spslr_find_module_symbol(const struct load_info *info,
+					      const char *name)
+{
+	Elf_Shdr *symsec = &info->sechdrs[info->index.sym];
+	Elf_Sym *sym = (void *)symsec->sh_addr;
+	unsigned int i, n = symsec->sh_size / sizeof(*sym);
+
+	for (i = 1; i < n; i++) {
+		const char *symname = info->strtab + sym[i].st_name;
+
+		if (strcmp(symname, name) != 0)
+			continue;
+
+		/* Ignore undefined symbols just in case. */
+		if (sym[i].st_shndx == SHN_UNDEF)
+			return 0;
+
+		return (unsigned long)sym[i].st_value;
+	}
+
+	return 0;
+}
+
+/* Apply structure layout randomization to module */
+static int __maybe_unused spslr_prepare_module(struct module *mod,
+					       const struct load_info *info)
+{
+	struct spslr_ctx ctx = { };
+	struct spslr_status st;
+	unsigned long workspace_size;
+	int err = 0;
+
+	ctx.entry.start_units = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_START_UNITS_SYM));
+	if (!ctx.entry.start_units) {
+		pr_err("%s: SPSLR units start symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	ctx.entry.stop_units = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_STOP_UNITS_SYM));
+	if (!ctx.entry.stop_units) {
+		pr_err("%s: SPSLR units stop symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	ctx.entry.start_targets = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_START_TARGETS_SYM));
+	if (!ctx.entry.start_targets) {
+		pr_err("%s: SPSLR targets start symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	ctx.entry.stop_targets = (const void *)spslr_find_module_symbol(info,
+							   __stringify(SPSLR_STOP_TARGETS_SYM));
+	if (!ctx.entry.stop_targets) {
+		pr_err("%s: SPSLR targets stop symbol missing\n", mod->name);
+		return -ENOEXEC;
+	}
+
+	workspace_size = spslr_workspace_size(&ctx.entry);
+	ctx.workspace = kvmalloc(workspace_size, GFP_KERNEL);
+	if (!ctx.workspace)
+		return -ENOMEM;
+
+	st = spslr_patch_module(&ctx);
+	if (st.viability != SPSLR_VIABLE || st.error != SPSLR_OK) {
+		pr_err("%s: SPSLR patch failed: viability=%d error=%d\n",
+		       mod->name, st.viability, st.error);
+		err = -ENOEXEC;
+	}
+
+	kvfree(ctx.workspace);
+	return err;
+}
+
+#endif /* CONFIG_SPSLR */
+
 /*
  * Allocate and load the module: note that size of section 0 is always
  * zero, and we rely on this for optional sections.
@@ -3519,6 +3677,15 @@ static int load_module(struct load_info *info, const char __user *uargs,
 	err = post_relocation(mod, info);
 	if (err < 0)
 		goto free_modinfo;
+
+#ifdef CONFIG_SPSLR
+	if (spslr_enabled) {
+		/* SPSLR must happen after relocation and icache should be flushed afterwards */
+		err = spslr_prepare_module(mod, info);
+		if (err < 0)
+			goto free_modinfo;
+	}
+#endif
 
 	flush_module_icache(mod);
 

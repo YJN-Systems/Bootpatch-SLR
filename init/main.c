@@ -119,6 +119,22 @@
 
 #include <kunit/test.h>
 
+#include <linux/spslr.h>
+#include <sanemaker/traps.h>
+
+#ifdef CONFIG_SPSLR
+
+bool spslr_enabled __ro_after_init = true;
+
+static int __init nospslr_setup(char *str)
+{
+	spslr_enabled = false;
+	return 0;
+}
+early_param("nospslr", nospslr_setup);
+
+#endif
+
 static int kernel_init(void *);
 
 /*
@@ -974,6 +990,8 @@ void start_kernel(void)
 	char *command_line;
 	char *after_dashes;
 
+	sanemaker_target_tag(&init_task, struct task_struct);
+
 	set_task_stack_end_magic(&init_task);
 	smp_setup_processor_id();
 	debug_objects_early_init();
@@ -1022,6 +1040,23 @@ void start_kernel(void)
 
 	/* Architectural and non-timekeeping rng init, before allocator init */
 	random_init_early(command_line);
+
+#ifdef CONFIG_SPSLR
+	if (spslr_enabled) {
+		/* Randomize structure layouts */
+		struct spslr_status spslr_init_status = spslr_init();
+		if (spslr_init_status.error != SPSLR_OK)
+			panic("SPSLR initialization failed");
+
+		struct spslr_status spslr_selfpatch_status = spslr_selfpatch();
+		if (spslr_selfpatch_status.error != SPSLR_OK)
+			panic("SPSLR selfpatch failed");
+
+		pr_notice("Successfully applied SPSLR\n");
+	} else {
+		pr_notice("SPSLR disabled\n");
+	}
+#endif
 
 	/*
 	 * These use large bootmem allocations and must precede

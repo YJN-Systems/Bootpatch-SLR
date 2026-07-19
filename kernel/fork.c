@@ -127,6 +127,9 @@
 
 #include <kunit/visibility.h>
 
+#include <linux/spslr.h>
+#include <sanemaker/traps.h>
+
 /*
  * Minimum number of threads to boot the kernel
  */
@@ -185,11 +188,16 @@ static struct kmem_cache *task_struct_cachep;
 
 static inline struct task_struct *alloc_task_struct_node(int node)
 {
-	return kmem_cache_alloc_node(task_struct_cachep, GFP_KERNEL, node);
+	struct task_struct *tsk =
+		kmem_cache_alloc_node(task_struct_cachep, GFP_KERNEL, node);
+
+	sanemaker_target_tag(tsk, struct task_struct);
+	return tsk;
 }
 
 static inline void free_task_struct(struct task_struct *tsk)
 {
+	sanemaker_target_untag(tsk);
 	kmem_cache_free(task_struct_cachep, tsk);
 }
 

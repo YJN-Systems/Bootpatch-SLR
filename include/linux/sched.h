@@ -829,12 +829,12 @@ struct task_struct {
 	 * For reasons of header soup (see current_thread_info()), this
 	 * must be the first element of task_struct.
 	 */
-	struct thread_info		thread_info;
+	struct thread_info		thread_info __spslr_field_fixed;
 #endif
-	unsigned int			__state;
+	unsigned int			__state __spslr_field_fixed;
 
 	/* saved state for "spinlock sleepers" */
-	unsigned int			saved_state;
+	unsigned int			saved_state __spslr_field_fixed;
 
 	/*
 	 * This begins the randomizable portion of task_struct. Only
@@ -877,12 +877,12 @@ struct task_struct {
 	int				normal_prio;
 	unsigned int			rt_priority;
 
-	struct sched_entity		se;
-	struct sched_rt_entity		rt;
+	struct sched_entity		se __spslr_field_fixed;
+	struct sched_rt_entity		rt __spslr_field_fixed;
 	struct sched_dl_entity		dl;
 	struct sched_dl_entity		*dl_server;
 #ifdef CONFIG_SCHED_CLASS_EXT
-	struct sched_ext_entity		scx;
+	struct sched_ext_entity		scx __spslr_field_fixed;
 #endif
 	const struct sched_class	*sched_class;
 
@@ -919,7 +919,7 @@ struct task_struct {
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	/* List of struct preempt_notifier: */
-	struct hlist_head		preempt_notifiers;
+	struct hlist_head		preempt_notifiers __spslr_field_fixed;
 #endif
 
 #ifdef CONFIG_BLK_DEV_IO_TRACE
@@ -931,15 +931,15 @@ struct task_struct {
 	int				nr_cpus_allowed;
 	const cpumask_t			*cpus_ptr;
 	cpumask_t			*user_cpus_ptr;
-	cpumask_t			cpus_mask;
+	cpumask_t			cpus_mask __spslr_field_fixed;
 	void				*migration_pending;
 	unsigned short			migration_disabled;
 	unsigned short			migration_flags;
 
 #ifdef CONFIG_PREEMPT_RCU
-	int				rcu_read_lock_nesting;
-	union rcu_special		rcu_read_unlock_special;
-	struct list_head		rcu_node_entry;
+	int				rcu_read_lock_nesting __spslr_field_fixed;
+	union rcu_special		rcu_read_unlock_special __spslr_field_fixed;
+	struct list_head		rcu_node_entry __spslr_field_fixed;
 	struct rcu_node			*rcu_blocked_node;
 #endif /* #ifdef CONFIG_PREEMPT_RCU */
 
@@ -948,9 +948,9 @@ struct task_struct {
 	u8				rcu_tasks_holdout;
 	u8				rcu_tasks_idx;
 	int				rcu_tasks_idle_cpu;
-	struct list_head		rcu_tasks_holdout_list;
+	struct list_head		rcu_tasks_holdout_list __spslr_field_fixed;
 	int				rcu_tasks_exit_cpu;
-	struct list_head		rcu_tasks_exit_list;
+	struct list_head		rcu_tasks_exit_list __spslr_field_fixed;
 #endif /* #ifdef CONFIG_TASKS_RCU */
 
 #ifdef CONFIG_TASKS_TRACE_RCU
@@ -964,8 +964,8 @@ struct task_struct {
 
 	struct sched_info		sched_info;
 
-	struct list_head		tasks;
-	struct plist_node		pushable_tasks;
+	struct list_head		tasks __spslr_field_fixed;
+	struct plist_node		pushable_tasks __spslr_field_fixed;
 	struct rb_node			pushable_dl_tasks;
 
 	struct mm_struct		*mm;
@@ -1072,8 +1072,12 @@ struct task_struct {
 	pid_t				tgid;
 
 #ifdef CONFIG_STACKPROTECTOR
+	/* Canary can not be randomized because of arch/x86/kernel/asm-offsets.c
+	 * Pinpoint plugin could recognize context of instrumented accesses
+	 * and e.g. hijack asm instructions that want to use them as constants.
+	 */
 	/* Canary value for the -fstack-protector GCC feature: */
-	unsigned long			stack_canary;
+	unsigned long				stack_canary __spslr_field_fixed;
 #endif
 	/*
 	 * Pointers to the (original) parent process, youngest child, younger sibling,
@@ -1090,8 +1094,8 @@ struct task_struct {
 	/*
 	 * Children/sibling form the list of natural children:
 	 */
-	struct list_head		children;
-	struct list_head		sibling;
+	struct list_head		children __spslr_field_fixed;
+	struct list_head		sibling __spslr_field_fixed;
 	struct task_struct		*group_leader;
 
 	/*
@@ -1100,13 +1104,13 @@ struct task_struct {
 	 * This includes both natural children and PTRACE_ATTACH targets.
 	 * 'ptrace_entry' is this task's link on the p->parent->ptraced list.
 	 */
-	struct list_head		ptraced;
-	struct list_head		ptrace_entry;
+	struct list_head		ptraced __spslr_field_fixed;
+	struct list_head		ptrace_entry __spslr_field_fixed;
 
 	/* PID/PID hash table linkage. */
 	struct pid			*thread_pid;
 	struct hlist_node		pid_links[PIDTYPE_MAX];
-	struct list_head		thread_node;
+	struct list_head		thread_node __spslr_field_fixed;
 
 	struct completion		*vfork_done;
 
@@ -1211,7 +1215,7 @@ struct task_struct {
 	sigset_t			real_blocked;
 	/* Restored if set_restore_sigmask() was used: */
 	sigset_t			saved_sigmask;
-	struct sigpending		pending;
+	struct sigpending		pending __spslr_field_fixed;
 	unsigned long			sas_ss_sp;
 	size_t				sas_ss_size;
 	unsigned int			sas_ss_flags;
@@ -1340,7 +1344,7 @@ struct task_struct {
 	/* Control Group info protected by css_set_lock: */
 	struct css_set __rcu		*cgroups;
 	/* cg_list protected by css_set_lock and tsk->alloc_lock: */
-	struct list_head		cg_list;
+	struct list_head		cg_list __spslr_field_fixed;
 #ifdef CONFIG_PREEMPT_RT
 	struct llist_node		cg_dead_lnode;
 #endif	/* CONFIG_PREEMPT_RT */
@@ -1355,8 +1359,8 @@ struct task_struct {
 #ifdef CONFIG_PERF_EVENTS
 	u8				perf_recursion[PERF_NR_CONTEXTS];
 	struct perf_event_context	*perf_event_ctxp;
-	struct mutex			perf_event_mutex;
-	struct list_head		perf_event_list;
+	struct mutex			perf_event_mutex __spslr_field_fixed;
+	struct list_head		perf_event_list __spslr_field_fixed;
 	struct perf_ctx_data __rcu	*perf_ctx_data;
 #endif
 #ifdef CONFIG_DEBUG_PREEMPT
@@ -1660,14 +1664,14 @@ struct task_struct {
 #endif
 
 	/* CPU-specific state of this task: */
-	struct thread_struct		thread;
+	struct thread_struct		thread __spslr_field_fixed;
 
 	/*
 	 * New fields for task_struct should be added above here, so that
 	 * they are included in the randomized portion of task_struct.
 	 */
 	randomized_struct_fields_end
-} __attribute__ ((aligned (64)));
+} __spslr __attribute__ ((aligned (64)));
 
 #ifdef CONFIG_SCHED_PROXY_EXEC
 DECLARE_STATIC_KEY_TRUE(__sched_proxy_exec);
