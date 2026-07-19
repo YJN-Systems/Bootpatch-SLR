@@ -8,6 +8,15 @@ ifdef CONFIG_GCC_PLUGIN_LATENT_ENTROPY
 endif
 export DISABLE_LATENT_ENTROPY_PLUGIN
 
+PINPOINT_PLUGIN_CFLAGS := \
+	-fplugin=$(objtree)/scripts/gcc-plugins/pinpoint_plugin.so \
+	-D__SPSLR__
+
+gcc-plugin-$(CONFIG_SPSLR) += pinpoint_plugin.so
+gcc-plugin-cflags-$(CONFIG_SPSLR) += -D__SPSLR__
+
+export PINPOINT_PLUGIN_CFLAGS
+
 # All the plugin CFLAGS are collected here in case a build target needs to
 # filter them out of the KBUILD_CFLAGS.
 GCC_PLUGINS_CFLAGS := $(strip $(addprefix -fplugin=$(objtree)/scripts/gcc-plugins/, $(gcc-plugin-y)) $(gcc-plugin-cflags-y)) -DGCC_PLUGINS

@@ -22,6 +22,24 @@ targets += randomize_layout_seed.h
 #
 # foo-objs := foo.o foo2.o
 
+pinpoint_plugin-objs := \
+	pinpoint.o \
+	asm_offset_pass.o \
+	dpin_registry.o \
+	ipin_registry.o \
+	layout_hash.o \
+	on_finish_decl.o \
+	on_finish_type.o \
+	on_finish_unit.o \
+	on_preserve_component_ref.o \
+	on_register_attributes.o \
+	on_start_unit.o \
+	rtl_ipin_survival_scan_pass.o \
+	separate_offset_pass.o \
+	serialize.o \
+	target_registry.o \
+	target_hash_builtin_pass.o
+
 always-y += $(GCC_PLUGIN)
 
 GCC_PLUGINS_DIR = $(shell $(CC) -print-file-name=plugin)
