@@ -1,0 +1,1 @@
+obj-$(CONFIG_SAMPLE_SPSLR_TASKLIST) += tasklist/
