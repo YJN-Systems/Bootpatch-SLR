@@ -2316,3 +2316,16 @@ config ARCH_HAS_SYNC_CORE_BEFORE_USERMODE
 # <asm/syscall_wrapper.h>.
 config ARCH_HAS_SYSCALL_WRAPPER
 	def_bool n
+
+config SPSLR
+	bool "Selfpatch SLR prototype"
+	depends on X86_64
+	depends on CC_IS_GCC
+	help
+	  Experimental structure layout randomization prototype.
+
+config SANEMAKER
+	bool "Selfpatch SLR validation tooling"
+	depends on SPSLR
+	help
+	  Experimental validation tooling for Selfpatch-SLR.

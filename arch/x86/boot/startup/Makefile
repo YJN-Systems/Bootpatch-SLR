@@ -12,6 +12,10 @@ KBUILD_CFLAGS		+= -D__DISABLE_EXPORTS -mcmodel=small -fPIC \
 # disable ftrace hooks and LTO
 KBUILD_CFLAGS	:= $(subst $(CC_FLAGS_FTRACE),,$(KBUILD_CFLAGS))
 KBUILD_CFLAGS	:= $(filter-out $(CC_FLAGS_LTO),$(KBUILD_CFLAGS))
+
+# Startup code executes before Bootpatch-SLR applies its runtime patches.
+KBUILD_CFLAGS	:= $(filter-out $(PINPOINT_PLUGIN_CFLAGS),$(KBUILD_CFLAGS))
+
 KASAN_SANITIZE	:= n
 KCSAN_SANITIZE	:= n
 KMSAN_SANITIZE	:= n

@@ -27,7 +27,7 @@ flags-remove-y += \
 	-mfentry -pg \
 	$(RANDSTRUCT_CFLAGS) $(GCC_PLUGINS_CFLAGS) $(KSTACK_ERASE_CFLAGS) \
 	$(RETPOLINE_CFLAGS) $(CC_FLAGS_LTO) $(CC_FLAGS_CFI) \
-	$(PADDING_CFLAGS)
+	$(PADDING_CFLAGS) $(PINPOINT_PLUGIN_CFLAGS)
 
 #
 # Don't omit frame pointers for ease of userspace debugging, but do
